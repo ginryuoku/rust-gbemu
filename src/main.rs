@@ -401,7 +401,7 @@ fn run(mut cpu: CPU) {
     let mut cycles_elapsed_in_frame = 0usize;
     // let mut now = Instant::now();
 
-    while true {
+    loop {
         cpu.step();
     }    
 }
