@@ -241,6 +241,13 @@ impl MemoryBus {
     fn read_byte(&self, address: u16) -> u8 {
         let address = address as usize;
         match address {
+            BOOT_ROM_BEGIN ... BOOT_ROM_END => {
+                if let Some(boot_rom) = self.boot_rom {
+                    boot_rom[address]
+                } else {
+                    self.rom_bank_0[address]
+                }
+            }
             _ => {
                 panic!("Reading from unknown memory at address 0x{:x}", address);
             }
