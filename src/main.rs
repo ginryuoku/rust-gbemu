@@ -145,8 +145,13 @@ enum LoadByteSource {
     A, B, C, D, E, H, L, D8, HLI
 }
 
+enum LoadWordTarget {
+    SP
+}
+
 enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
+    Word(LoadWordTarget)
 }
 
 enum StackTarget {
@@ -181,6 +186,7 @@ impl Instruction {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
+            0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             _ => /* TODO: add instruction mappings */ None
         }
     }
@@ -331,6 +337,14 @@ impl CPU {
                             _                  => self.pc.wrapping_add(1),
                         }
                     }
+                    LoadType::Word(target) => {
+                        let word = self.read_next_word();
+                        match target {
+                            LoadWordTarget::SP => self.sp = word,
+                            _ => { panic!("TODO: implement other word targets")}
+                        }
+                        self.pc.wrapping_add(3)
+                    }
                     _ => panic!("TODO: implement other load types")
                 }
             }
@@ -381,6 +395,9 @@ impl CPU {
         self.sp = self.sp.wrapping_add(1);
 
         (msb << 8) | lsb
+    }
+    fn read_next_word(&self) -> u16 {
+        ((self.bus.read_byte(self.pc + 2) as u16) << 8) | (self.bus.read_byte(self.pc + 1) as u16)
     }
 }
 
