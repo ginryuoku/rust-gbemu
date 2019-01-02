@@ -520,10 +520,12 @@ fn main() {
         .author("Michelle Darcy <mdarcy137@gmail.com")
         .arg(Arg::with_name("bootrom")
             .short("b")
+            .default_value("./roms/boot.bin")
             .value_name("FILE"))
         .arg(Arg::with_name("rom")
             .short("r")
             .required(true)
+            .default_value("./roms/tetris.gb")
             .value_name("FILE"))
         .get_matches();
 
