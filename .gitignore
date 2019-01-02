@@ -13,3 +13,5 @@
 **/*.rs.bk
 
 roms/
+
+\.vscode/

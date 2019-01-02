@@ -365,10 +365,11 @@ impl CPU {
             instruction_byte = self.bus.read_byte(self.pc + 1);
         }
 
+        let _description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
+        println!("Decoding instruction found at: 0x{:x}, pc: 0x{:x}", instruction_byte, self.pc);
+
         let next_pc: u16 = if 
         let Some(instruction) = Instruction::from_byte(instruction_byte, prefixed) {
-            let _description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
-            println!("Executing instruction found at: 0x{:x}, pc: 0x{:x}", instruction_byte, self.pc);
             self.execute(instruction)
         } else {
             let _description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
