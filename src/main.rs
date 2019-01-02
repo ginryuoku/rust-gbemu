@@ -144,7 +144,7 @@ enum JumpTest {
 }
 
 enum IncDecTarget {
-    BC, DE
+    C, BC, DE
 }
 
 enum PrefixTarget {
@@ -228,6 +228,7 @@ impl Instruction {
     fn from_byte_not_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
+            0x0c => Some(Instruction::INC(IncDecTarget::C)),
             0x0e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
             0x20 => Some(Instruction::JR(JumpTest::NotZero)),
@@ -476,6 +477,17 @@ impl CPU {
                 }
                 self.pc.wrapping_add(2)
             }
+            Instruction::INC(target) => {
+                match target {
+                    IncDecTarget::C => {
+                        let value = self.registers.c;
+                        let new_value = self.inc_8bit(value);
+                        self.registers.c = new_value;
+                    },
+                    _ => {panic!("TODO: implement other targets")}
+                };
+                self.pc.wrapping_add(1)
+            }
             Instruction::LD(load_type) => {
                 match load_type {
                     LoadType::Byte(target, source) => {
@@ -585,6 +597,14 @@ impl CPU {
         self.registers.f.zero = result == 0;
         self.registers.f.subtract = false;
         self.registers.f.half_carry = true;
+    }
+    fn inc_8bit(&mut self, value: u8) -> u8 {
+        let (new_value, did_overflow) = value.overflowing_add(1);
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = (new_value & 0xF) + (value & 0xF) > 0xF;
+        self.registers.f.carry = did_overflow;
+        new_value
     }
     fn push(&mut self, value: u16) {
         self.sp = self.sp.wrapping_sub(1);
