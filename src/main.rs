@@ -164,7 +164,8 @@ enum Instruction {
     JP(JumpTest),
     LD(LoadType),
     POP(StackTarget),
-    PUSH(StackTarget)
+    PUSH(StackTarget),
+    XOR(ArithmeticTarget)
 }
 
 impl Instruction {
@@ -187,6 +188,7 @@ impl Instruction {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
+            0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
             _ => /* TODO: add instruction mappings */ None
         }
     }
@@ -374,6 +376,17 @@ impl CPU {
                 self.push(value);
                 self.pc.wrapping_add(1)
             }
+            Instruction::XOR(target) => {
+                match target {
+                    ArithmeticTarget::A => {
+                        let value = self.registers.a;
+                        let new_value = self.xor(value);
+                        self.registers.a = new_value;
+                    },
+                    _ => { panic!("TODO: support other XOR targets")}
+                }
+                self.pc.wrapping_add(1)
+            }
             _ => { /* TODO: support more instructions */ self.pc }
         }
     }
@@ -398,6 +411,14 @@ impl CPU {
     }
     fn read_next_word(&self) -> u16 {
         ((self.bus.read_byte(self.pc + 2) as u16) << 8) | (self.bus.read_byte(self.pc + 1) as u16)
+    }
+    fn xor(&mut self, value: u8) -> u8 {
+        let new_value = self.registers.a ^ value;
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false;
+        new_value
     }
 }
 
