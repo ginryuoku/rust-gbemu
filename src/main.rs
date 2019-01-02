@@ -236,6 +236,7 @@ impl Instruction {
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
             0x3e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8))),
+            0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
             0xe2 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::LastByteIndirect))),
@@ -494,15 +495,18 @@ impl CPU {
                         let source_value = match source {
                             LoadByteSource::H => self.registers.h,
                             LoadByteSource::D8 => self.read_next_byte(),
+                            LoadByteSource::HLI => self.bus.read_byte(self.registers.get_hl()),
                             _ => { panic!("TODO: implement other sources")}
                         };
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::C => self.registers.c = source_value,
+                            LoadByteTarget::HLI => self.bus.write_byte(self.registers.get_hl(), source_value),
                             _ => { panic!("TODO: implement other targets")}
                         }
                         match source {
                             LoadByteSource::D8 => self.pc.wrapping_add(2),
+                            LoadByteSource::HLI => self.pc.wrapping_add(1),
                             _                  => self.pc.wrapping_add(1),
                         }
                     }
