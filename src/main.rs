@@ -383,7 +383,7 @@ impl MemoryBus {
         match address {
             0xFF24 => { println!("Writing 0x{:x} to sound volume register", value)}
             0xFF26 => { 
-                if value == 0 {
+                if (value & 128) == 0 {
                     println!("Gameboy requesting sound disable")
                 } else {
                     println!("Gameboy requesting sound enable")
