@@ -213,6 +213,60 @@ struct CPU {
     is_halted: bool
 }
 
+#[derive(Copy, Clone)]
+enum TilePixelValue {
+    Zero, 
+    One, 
+    Two, 
+    Three
+}
+
+type Tile = [[TilePixelValue; 8]; 8];
+fn empty_tile() -> Tile {
+    [[TilePixelValue::Zero; 8]; 8]
+}
+
+struct GPU {
+    vram: [u8; VRAM_SIZE],
+    tile_set: [Tile; 384],
+}
+
+impl GPU {
+    fn new() -> GPU {
+        GPU {
+            tile_set: [empty_tile(); 384],
+            vram: [0; VRAM_SIZE],
+        }
+    }
+
+    fn write_vram(&mut self, index: usize, value: u8) {
+        self.vram[index] = value;
+        if index >= 0x1800 { return }
+
+        let normalized_index = index & 0xFFFE;
+        let byte1 = self.vram[normalized_index];
+        let byte2 = self.vram[normalized_index + 1];
+
+        let tile_index = index / 16;
+        let row_index = (index % 16) / 2;
+
+        for pixel_index in 0..8 {
+            let mask = 1 << (7 - pixel_index);
+            let lsb = byte1 & mask;
+            let msb = byte2 & mask;
+
+            let value = match(lsb != 0, msb != 0) {
+                (true, true) => TilePixelValue::Three,
+                (false, true) => TilePixelValue::Two,
+                (true, false) => TilePixelValue::One,
+                (false, false) => TilePixelValue::Zero
+            };
+
+            self.tile_set[tile_index][row_index][pixel_index] = value;
+        }
+    }
+}
+
 struct MemoryBus {
     boot_rom: Option<[u8; BOOT_ROM_SIZE]>,
     rom_bank_0: [u8; ROM_BANK_0_SIZE],
@@ -220,7 +274,8 @@ struct MemoryBus {
     external_ram: [u8; EXTERNAL_RAM_SIZE],
     working_ram: [u8; WORKING_RAM_SIZE],
     oam: [u8; OAM_SIZE],
-    zero_page: [u8; ZERO_PAGE_SIZE],  
+    zero_page: [u8; ZERO_PAGE_SIZE],
+    gpu: GPU
 }
 
 impl MemoryBus {
@@ -250,6 +305,7 @@ impl MemoryBus {
             working_ram: [0; WORKING_RAM_SIZE],
             oam: [0; OAM_SIZE],
             zero_page: [0; ZERO_PAGE_SIZE],
+            gpu: GPU::new()
         }
     }
     fn read_byte(&self, address: u16) -> u8 {
@@ -267,11 +323,14 @@ impl MemoryBus {
             }
         }
     }
-    fn write_byte(&self, addr: u16, value: u8) {
-        let address = addr as usize;
+    fn write_byte(&mut self, address: u16, value: u8) {
+        let address = address as usize;
         match address {
+            VRAM_BEGIN ... VRAM_END => {
+                self.gpu.write_vram(address - VRAM_BEGIN, value);
+            }
             _ => {
-                panic!("Writing to unknown memory at address 0x{:x}", address);
+                panic!("Writing to unknown memory section at address 0x{:x}", address);
             }
         }
     }
