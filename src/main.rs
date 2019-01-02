@@ -40,6 +40,11 @@ impl Registers {
         self.b = ((value & 0xFF00) >> 8) as u8;
         self.c = (value & 0xFF) as u8;
     }
+
+    fn set_hl(&mut self, value: u16) {
+        self.h = ((value & 0xFF00) >> 8) as u8;
+        self.l = (value & 0xFF) as u8;
+    }
 }
 
 struct FlagsRegister {
@@ -146,7 +151,7 @@ enum LoadByteSource {
 }
 
 enum LoadWordTarget {
-    SP
+    HL, SP
 }
 
 enum LoadType {
@@ -187,6 +192,7 @@ impl Instruction {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
+            0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
             _ => /* TODO: add instruction mappings */ None
@@ -342,6 +348,7 @@ impl CPU {
                     LoadType::Word(target) => {
                         let word = self.read_next_word();
                         match target {
+                            LoadWordTarget::HL => self.registers.set_hl(word),
                             LoadWordTarget::SP => self.sp = word,
                             _ => { panic!("TODO: implement other word targets")}
                         }
