@@ -201,6 +201,7 @@ enum Instruction {
     BIT(PrefixTarget, BitPosition),
     INC(IncDecTarget),
     JP(JumpTest),
+    JR(JumpTest),
     LD(LoadType),
     POP(StackTarget),
     PUSH(StackTarget),
@@ -227,6 +228,7 @@ impl Instruction {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
+            0x20 => Some(Instruction::JR(JumpTest::NotZero)),
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
@@ -407,14 +409,26 @@ impl CPU {
 
     fn jump(&self, should_jump: bool) -> u16 {
         if should_jump {
-            let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
-            let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
-            (most_significant_byte << 8) | least_significant_byte
+            self.read_next_word()
         } else {
             self.pc.wrapping_add(3)
         }
     }
-
+    
+    fn jump_relative(&self, should_jump: bool) -> u16 {
+        let next_step = self.pc.wrapping_add(2);
+        if should_jump {
+            let offset = self.read_next_byte() as i8;
+            let pc = if offset >= 0 {
+                next_step.wrapping_add(offset as u16)
+            } else {
+                next_step.wrapping_sub(offset.abs() as u16)
+            };
+            pc
+        } else {
+            next_step
+        }
+    }
     fn execute(&mut self, instruction: Instruction) -> u16 {
         match instruction {
             Instruction::ADD(target) => {
@@ -494,6 +508,16 @@ impl CPU {
                 };
                 self.jump(jump_condition)
             }
+            Instruction::JR(test) => {
+                let jump_condition = match test {
+                    JumpTest::NotZero => !self.registers.f.zero,
+                    JumpTest::NotCarry => !self.registers.f.carry,
+                    JumpTest::Zero => self.registers.f.zero,
+                    JumpTest::Carry => self.registers.f.carry,
+                    JumpTest::Always => true
+                };
+                self.jump_relative(jump_condition)
+            }
             Instruction::POP(target) => {
                 let result = self.pop();
                 match target {
@@ -510,6 +534,7 @@ impl CPU {
                 self.push(value);
                 self.pc.wrapping_add(1)
             }
+
             Instruction::XOR(target) => {
                 match target {
                     ArithmeticTarget::A => {
@@ -549,6 +574,9 @@ impl CPU {
         self.sp = self.sp.wrapping_add(1);
 
         (msb << 8) | lsb
+    }
+    fn read_next_byte(&self) -> u8 {
+        (self.bus.read_byte(self.pc + 1))
     }
     fn read_next_word(&self) -> u16 {
         ((self.bus.read_byte(self.pc + 2) as u16) << 8) | (self.bus.read_byte(self.pc + 1) as u16)
