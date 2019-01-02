@@ -40,6 +40,16 @@ impl Registers {
         self.b = ((value & 0xFF00) >> 8) as u8;
         self.c = (value & 0xFF) as u8;
     }
+    
+    fn get_de(&self) -> u16 {
+        (self.d as u16) << 8
+        | self.c as u16
+    }
+
+    fn set_de(&mut self, value: u16) {
+        self.d = ((value & 0xFF00) >> 8) as u8;
+        self.e = (value & 0xFF) as u8;
+    }
 
     fn get_hl(&self) -> u16 {
         (self.h as u16) << 8
@@ -160,18 +170,22 @@ enum LoadByteSource {
 }
 
 enum LoadWordTarget {
-    HL, SP
+    DE, HL, SP
 }
 
 enum Indirect {
+    DEIndirect,
     HLIndirectMinus,
-    LastByteIndirect
+    LastByteIndirect,
+    WordIndirect
 }
 
 enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
     Word(LoadWordTarget),
-    IndirectFromA(Indirect)
+    AFromIndirect(Indirect),
+    IndirectFromA(Indirect),
+    ByteAddressFromA
 }
 
 enum StackTarget {
@@ -230,7 +244,9 @@ impl Instruction {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
             0x0c => Some(Instruction::INC(IncDecTarget::C)),
             0x0e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
+            0x11 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::DE))),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
+            0x1a => Some(Instruction::LD(LoadType::AFromIndirect(Indirect::DEIndirect))),
             0x20 => Some(Instruction::JR(JumpTest::NotZero)),
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
@@ -239,6 +255,7 @@ impl Instruction {
             0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
+            0xe0 => Some(Instruction::LD(LoadType::ByteAddressFromA)),
             0xe2 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::LastByteIndirect))),
             _ => /* TODO: add instruction mappings */ None
         }
@@ -496,6 +513,7 @@ impl CPU {
                 match load_type {
                     LoadType::Byte(target, source) => {
                         let source_value = match source {
+                            LoadByteSource::A => self.registers.a,
                             LoadByteSource::H => self.registers.h,
                             LoadByteSource::D8 => self.read_next_byte(),
                             LoadByteSource::HLI => self.bus.read_byte(self.registers.get_hl()),
@@ -516,11 +534,23 @@ impl CPU {
                     LoadType::Word(target) => {
                         let word = self.read_next_word();
                         match target {
+                            LoadWordTarget::DE => self.registers.set_de(word),
                             LoadWordTarget::HL => self.registers.set_hl(word),
                             LoadWordTarget::SP => self.sp = word,
                             _ => { panic!("TODO: implement other word targets")}
                         }
                         self.pc.wrapping_add(3)
+                    }
+                    LoadType::AFromIndirect(source) => {
+                        self.registers.a = match source {
+                            Indirect::DEIndirect => self.bus.read_byte((self.registers.get_de())),
+                            _ => { panic!("TODO: implement other indirect sources")},
+                        };
+
+                        match source {
+                            Indirect::WordIndirect     => self.pc.wrapping_add(3),
+                            _                          => self.pc.wrapping_add(1),
+                        }
                     }
                     LoadType::IndirectFromA(target) => {
                         let a = self.registers.a;
@@ -540,6 +570,11 @@ impl CPU {
                         match target {
                             _ => (self.pc.wrapping_add(1))
                         }
+                    }
+                    LoadType::ByteAddressFromA => {
+                        let offset = self.bus.read_byte(self.pc + 1) as u16;
+                        self.bus.write_byte(0xFF00 + offset, self.registers.a);
+                        self.pc.wrapping_add(2)
                     }
                     _ => panic!("TODO: implement other load types")
                 }
