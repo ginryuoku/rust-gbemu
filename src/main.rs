@@ -288,9 +288,54 @@ fn empty_tile() -> Tile {
     [[TilePixelValue::Zero; 8]; 8]
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Color {
+    White = 255,
+    LightGray = 192,
+    DarkGray = 96,
+    Black = 0
+}
+
+impl std::convert::From<u8> for Color {
+    fn from(n: u8) -> Self {
+        match n {
+            0 => Color::White,
+            1 => Color::LightGray,
+            2 => Color::DarkGray,
+            3 => Color::Black,
+            _ => panic!("Cannot covert {} to color", n)
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct BackgroundColors(
+    Color,
+    Color,
+    Color,
+    Color
+);
+
+impl BackgroundColors {
+    fn new() -> BackgroundColors {
+        BackgroundColors(Color::White, Color::LightGray, Color::DarkGray, Color::Black)
+    }
+}
+
+impl std::convert::From<u8> for BackgroundColors {
+    fn from(value: u8) -> Self {
+        BackgroundColors(
+            (value & 0b11).into(),
+            ((value >> 2) & 0b11).into(),
+            ((value >> 4) & 0b11).into(),
+            (value >> 6).into(),
+            )
+    }
+}
 struct GPU {
     vram: [u8; VRAM_SIZE],
     tile_set: [Tile; 384],
+    background_colors: BackgroundColors
 }
 
 impl GPU {
@@ -298,6 +343,7 @@ impl GPU {
         GPU {
             tile_set: [empty_tile(); 384],
             vram: [0; VRAM_SIZE],
+            background_colors: BackgroundColors::new()
         }
     }
 
@@ -413,6 +459,10 @@ impl MemoryBus {
                     println!("Gameboy requesting sound enable")
                 }
             },
+            0xFF47 => {
+                // background colors setting
+                self.gpu.background_colors = value.into();
+            }
             _ => panic!("Writing '0b{:b}' to an unknown I/O register {:x}", value, address)
         }
     }
