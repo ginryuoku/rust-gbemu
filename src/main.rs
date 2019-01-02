@@ -227,11 +227,13 @@ impl Instruction {
     fn from_byte_not_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
+            0x0e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
             0x20 => Some(Instruction::JR(JumpTest::NotZero)),
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
+            0x3E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
             _ => /* TODO: add instruction mappings */ None
@@ -460,10 +462,12 @@ impl CPU {
                     LoadType::Byte(target, source) => {
                         let source_value = match source {
                             LoadByteSource::H => self.registers.h,
+                            LoadByteSource::D8 => self.read_next_byte(),
                             _ => { panic!("TODO: implement other sources")}
                         };
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
+                            LoadByteTarget::C => self.registers.c = source_value,
                             _ => { panic!("TODO: implement other targets")}
                         }
                         match source {
