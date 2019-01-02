@@ -233,9 +233,10 @@ impl Instruction {
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
-            0x3E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8))),
+            0x3e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
+            0xe2 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::LastByteIndirect))),
             _ => /* TODO: add instruction mappings */ None
         }
     }
