@@ -41,6 +41,11 @@ impl Registers {
         self.c = (value & 0xFF) as u8;
     }
 
+    fn get_hl(&self) -> u16 {
+        (self.h as u16) << 8
+        | self.l as u16
+    }
+
     fn set_hl(&mut self, value: u16) {
         self.h = ((value & 0xFF00) >> 8) as u8;
         self.l = (value & 0xFF) as u8;
@@ -154,9 +159,14 @@ enum LoadWordTarget {
     HL, SP
 }
 
+enum Indirect {
+    HLIndirectMinus
+}
+
 enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
-    Word(LoadWordTarget)
+    Word(LoadWordTarget),
+    IndirectFromA(Indirect)
 }
 
 enum StackTarget {
@@ -194,6 +204,7 @@ impl Instruction {
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
+            0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
             _ => /* TODO: add instruction mappings */ None
         }
@@ -412,6 +423,21 @@ impl CPU {
                             _ => { panic!("TODO: implement other word targets")}
                         }
                         self.pc.wrapping_add(3)
+                    }
+                    LoadType::IndirectFromA(target) => {
+                        let a = self.registers.a;
+                        match target {
+                            Indirect::HLIndirectMinus => {
+                                let hl = self.registers.get_hl();
+                                self.registers.set_hl(hl.wrapping_sub(1));
+                                self.bus.write_byte(hl, a);
+                            }
+                            _ => panic!("TODO: implement other indirect from A targets")
+                        }
+
+                        match target {
+                            _ => (self.pc.wrapping_add(1))
+                        }
                     }
                     _ => panic!("TODO: implement other load types")
                 }
