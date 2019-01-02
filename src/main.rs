@@ -369,10 +369,27 @@ impl MemoryBus {
         match address {
             VRAM_BEGIN ... VRAM_END => {
                 self.gpu.write_vram(address - VRAM_BEGIN, value);
-            }
+            },
+            IO_REGISTERS_BEGIN ... IO_REGISTERS_END => {
+                self.write_io_register(address, value)
+            },
             _ => {
                 panic!("Writing to unknown memory section at address 0x{:x}", address);
             }
+        }
+    }
+
+    fn write_io_register(&mut self, address: usize, value: u8) {
+        match address {
+            0xFF24 => { println!("Writing 0x{:x} to sound volume register", value)}
+            0xFF26 => { 
+                if value == 0 {
+                    println!("Gameboy requesting sound disable")
+                } else {
+                    println!("Gameboy requesting sound enable")
+                }
+            }
+            _ => panic!("Writing '0b{:b}' to an unknown I/O register {:x}", value, address)
         }
     }
 }
