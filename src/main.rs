@@ -147,6 +147,10 @@ enum IncDecTarget {
     BC, DE
 }
 
+enum PrefixTarget {
+    A, B, C, D, E, H, L, HLI
+}
+
 enum LoadByteTarget {
     A, B, C, D, E, H, L, HLI
 }
@@ -173,8 +177,28 @@ enum StackTarget {
     BC, DE
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum BitPosition {
+    B0, B1, B2, B3, B4, B5, B6, B7
+}
+impl std::convert::From<BitPosition> for u8  {
+    fn from(position: BitPosition) -> u8 {
+        match position {
+            BitPosition::B0 => 0,
+            BitPosition::B1 => 1,
+            BitPosition::B2 => 2,
+            BitPosition::B3 => 3,
+            BitPosition::B4 => 4,
+            BitPosition::B5 => 5,
+            BitPosition::B6 => 6,
+            BitPosition::B7 => 7
+        }
+    }
+}
+
 enum Instruction {
     ADD(ArithmeticTarget),
+    BIT(PrefixTarget, BitPosition),
     INC(IncDecTarget),
     JP(JumpTest),
     LD(LoadType),
@@ -194,6 +218,7 @@ impl Instruction {
 
     fn from_byte_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
+            0x7c => Some(Instruction::BIT(PrefixTarget::H, BitPosition::B7)),
             _ => None
         }
     }
@@ -205,6 +230,7 @@ impl Instruction {
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
+            0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
             _ => /* TODO: add instruction mappings */ None
         }
@@ -402,13 +428,28 @@ impl CPU {
                     _ => { /* TODO: support more targets */ self.pc }
                 }
             }
+            Instruction::BIT(register, bit_position) => {
+                match register {
+                    PrefixTarget::H => {
+                        let value = self.registers.h;
+                        match bit_position {
+                            BitPosition::B7 => self.bit_test(value, BitPosition::B7),
+                            _ => { panic!("TODO: implement other positions for BIT comparison")}
+                        };
+                    }
+                    _ => { panic!("TODO: implement other registers for BIT comparison")}
+                }
+                self.pc.wrapping_add(2)
+            }
             Instruction::LD(load_type) => {
                 match load_type {
                     LoadType::Byte(target, source) => {
                         let source_value = match source {
+                            LoadByteSource::H => self.registers.h,
                             _ => { panic!("TODO: implement other sources")}
                         };
                         match target {
+                            LoadByteTarget::A => self.registers.a = source_value,
                             _ => { panic!("TODO: implement other targets")}
                         }
                         match source {
@@ -485,6 +526,13 @@ impl CPU {
     }
     fn add(&self, value: u8) -> u8 {
         0
+    }
+    fn bit_test(&mut self, value: u8, bit_position: BitPosition) {
+        let bit_position: u8 = bit_position.into();
+        let result = (value >> bit_position) & 0b1;
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = true;
     }
     fn push(&mut self, value: u16) {
         self.sp = self.sp.wrapping_sub(1);
