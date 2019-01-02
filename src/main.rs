@@ -164,7 +164,8 @@ enum LoadWordTarget {
 }
 
 enum Indirect {
-    HLIndirectMinus
+    HLIndirectMinus,
+    LastByteIndirect
 }
 
 enum LoadType {
@@ -509,6 +510,10 @@ impl CPU {
                                 let hl = self.registers.get_hl();
                                 self.registers.set_hl(hl.wrapping_sub(1));
                                 self.bus.write_byte(hl, a);
+                            },
+                            Indirect::LastByteIndirect => {
+                                let c = self.registers.c as u16;
+                                self.bus.write_byte(0xFF00 + c, a);
                             }
                             _ => panic!("TODO: implement other indirect from A targets")
                         }
