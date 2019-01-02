@@ -426,6 +426,9 @@ impl MemoryBus {
                     self.rom_bank_0[address]
                 }
             }
+            ROM_BANK_0_BEGIN ... ROM_BANK_0_END => {
+                self.rom_bank_0[address]
+            }
             _ => {
                 panic!("Reading from unknown memory at address 0x{:x}", address);
             }
