@@ -385,14 +385,17 @@ impl MemoryBus {
 
     fn write_io_register(&mut self, address: usize, value: u8) {
         match address {
-            0xFF24 => { println!("Writing 0x{:x} to sound volume register", value)}
+            0xFF11 => {println!("Writing 0x{:x} to Channel 1 sweep register", value)},
+            0xFF12 => {println!("Writing 0x{:x} to Channel 1 sound length/wave pattern duty register", value)},
+            0xFF24 => {println!("Writing 0x{:x} to sound volume register", value)},
+            0xFF25 => {println!("Writing 0x{:x} to sound output terminal", value)},
             0xFF26 => { 
                 if (value & 128) == 0 {
                     println!("Gameboy requesting sound disable")
                 } else {
                     println!("Gameboy requesting sound enable")
                 }
-            }
+            },
             _ => panic!("Writing '0b{:b}' to an unknown I/O register {:x}", value, address)
         }
     }
