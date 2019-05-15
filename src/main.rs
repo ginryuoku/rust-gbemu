@@ -222,6 +222,7 @@ enum Instruction {
     POP(StackTarget),
     PUSH(StackTarget),
     RL(PrefixTarget),
+    RLA,
     XOR(ArithmeticTarget)
 }
 
@@ -250,6 +251,7 @@ impl Instruction {
             0x0e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
             0x11 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::DE))),
             0x13 => Some(Instruction::INC(IncDecTarget::DE)),
+            0x17 => Some(Instruction::RLA),
             0x1a => Some(Instruction::LD(LoadType::AFromIndirect(Indirect::DEIndirect))),
             0x20 => Some(Instruction::JR(JumpTest::NotZero)),
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL))),
@@ -716,6 +718,12 @@ impl CPU {
                 }
                 self.pc.wrapping_add(2)
             }
+            Instruction::RLA => {
+                let value = self.registers.a;
+                let new_value = self.rotate_left_through_carry_retain_zero(value);
+                self.registers.a = new_value;
+                self.pc.wrapping_add(1)
+            }
             Instruction::XOR(target) => {
                 match target {
                     ArithmeticTarget::A => {
@@ -783,6 +791,10 @@ impl CPU {
 
     fn rotate_left_through_carry_set_zero(&mut self, value: u8) -> u8 {
         self.rotate_left_through_carry(value, true)
+    }
+    
+    fn rotate_left_through_carry_retain_zero(&mut self, value: u8) -> u8 {
+        self.rotate_left_through_carry(value, false)
     }
 
     fn xor(&mut self, value: u8) -> u8 {
