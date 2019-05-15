@@ -243,6 +243,7 @@ impl Instruction {
     fn from_byte_not_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
+            0x06 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::D8))),
             0x0c => Some(Instruction::INC(IncDecTarget::C)),
             0x0e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
             0x11 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::DE))),
@@ -253,9 +254,11 @@ impl Instruction {
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP))),
             0x32 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::HLIndirectMinus))),
             0x3e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8))),
+            0x4f => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::A))),
             0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
+            0xc5 => Some(Instruction::PUSH(StackTarget::BC)),
             0xcd => Some(Instruction::CALL(JumpTest::Always)),
             0xe0 => Some(Instruction::LD(LoadType::ByteAddressFromA)),
             0xe2 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::LastByteIndirect))),
@@ -600,6 +603,7 @@ impl CPU {
                         };
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
+                            LoadByteTarget::B => self.registers.b = source_value,
                             LoadByteTarget::C => self.registers.c = source_value,
                             LoadByteTarget::HLI => self.bus.write_byte(self.registers.get_hl(), source_value),
                             _ => { panic!("TODO: implement other targets")}
