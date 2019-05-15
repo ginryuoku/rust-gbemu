@@ -221,6 +221,7 @@ enum Instruction {
     LD(LoadType),
     POP(StackTarget),
     PUSH(StackTarget),
+    RL(PrefixTarget),
     XOR(ArithmeticTarget)
 }
 
@@ -235,6 +236,7 @@ impl Instruction {
 
     fn from_byte_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
+            0x11 => Some(Instruction::RL(PrefixTarget::C)),
             0x7c => Some(Instruction::BIT(PrefixTarget::H, BitPosition::B7)),
             _ => None
         }
@@ -698,7 +700,22 @@ impl CPU {
                 self.push(value);
                 self.pc.wrapping_add(1)
             }
-
+            Instruction::RL(register) => {
+                match register {
+                    PrefixTarget::C => {
+                        let value = self.registers.c;
+                        let new_value = self.rotate_left_through_carry_set_zero(value);
+                        self.registers.c = new_value;
+                    }
+                    PrefixTarget::H => {
+                        let value = self.registers.h;
+                        let new_value = self.rotate_left_through_carry_set_zero(value);
+                        self.registers.h = new_value;
+                    }
+                    _ => { panic!("TODO: implement other registers for RL")}
+                }
+                self.pc.wrapping_add(2)
+            }
             Instruction::XOR(target) => {
                 match target {
                     ArithmeticTarget::A => {
@@ -753,6 +770,21 @@ impl CPU {
     fn read_next_word(&self) -> u16 {
         ((self.bus.read_byte(self.pc + 2) as u16) << 8) | (self.bus.read_byte(self.pc + 1) as u16)
     }
+
+    fn rotate_left_through_carry(&mut self, value: u8, set_zero: bool) -> u8 {
+        let carry_bit = if self.registers.f.carry { 1 } else { 0 };
+        let new_value = (value << 1) | carry_bit;
+        self.registers.f.zero = set_zero && new_value == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = (value & 0x80) == 0x80;
+        new_value
+    }
+
+    fn rotate_left_through_carry_set_zero(&mut self, value: u8) -> u8 {
+        self.rotate_left_through_carry(value, true)
+    }
+
     fn xor(&mut self, value: u8) -> u8 {
         let new_value = self.registers.a ^ value;
         self.registers.f.zero = new_value == 0;
