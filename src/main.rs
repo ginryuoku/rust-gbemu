@@ -738,7 +738,7 @@ fn main() {
         .author("Michelle Darcy <mdarcy137@gmail.com")
         .arg(Arg::with_name("bootrom")
             .short("b")
-            .default_value("./roms/boot.bin")
+            .default_value("./roms/dmg_boot.bin")
             .value_name("FILE"))
         .arg(Arg::with_name("rom")
             .short("r")
