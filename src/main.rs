@@ -622,7 +622,7 @@ impl CPU {
                     }
                     LoadType::AFromIndirect(source) => {
                         self.registers.a = match source {
-                            Indirect::DEIndirect => self.bus.read_byte((self.registers.get_de())),
+                            Indirect::DEIndirect => self.bus.read_byte(self.registers.get_de()),
                             _ => { panic!("TODO: implement other indirect sources")},
                         };
 
