@@ -214,6 +214,7 @@ impl std::convert::From<BitPosition> for u8  {
 enum Instruction {
     ADD(ArithmeticTarget),
     BIT(PrefixTarget, BitPosition),
+    CALL(JumpTest),
     INC(IncDecTarget),
     JP(JumpTest),
     JR(JumpTest),
@@ -255,6 +256,7 @@ impl Instruction {
             0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
+            0xcd => Some(Instruction::CALL(JumpTest::Always)),
             0xe0 => Some(Instruction::LD(LoadType::ByteAddressFromA)),
             0xe2 => Some(Instruction::LD(LoadType::IndirectFromA(Indirect::LastByteIndirect))),
             _ => /* TODO: add instruction mappings */ None
@@ -443,6 +445,9 @@ impl MemoryBus {
             IO_REGISTERS_BEGIN ... IO_REGISTERS_END => {
                 self.write_io_register(address, value)
             },
+            ZERO_PAGE_BEGIN ... ZERO_PAGE_END => {
+                self.zero_page[address - ZERO_PAGE_BEGIN] = value
+            }
             _ => {
                 panic!("Writing to unknown memory section at address 0x{:x}", address);
             }
@@ -525,6 +530,17 @@ impl CPU {
             next_step
         }
     }
+
+    fn call(&mut self, should_jump: bool) -> u16 {
+        let next_pc = self.pc.wrapping_add(3);
+        if should_jump {
+            self.push(next_pc);
+            self.read_next_word()
+        } else {
+            next_pc
+        }
+    }
+
     fn execute(&mut self, instruction: Instruction) -> u16 {
         match instruction {
             Instruction::ADD(target) => {
@@ -550,6 +566,16 @@ impl CPU {
                     _ => { panic!("TODO: implement other registers for BIT comparison")}
                 }
                 self.pc.wrapping_add(2)
+            }
+            Instruction::CALL(test) => {
+                let jump_condition = match test {
+                    JumpTest::NotZero => !self.registers.f.zero,
+                    JumpTest::NotCarry => !self.registers.f.carry,
+                    JumpTest::Zero => self.registers.f.zero,
+                    JumpTest::Carry => self.registers.f.carry,
+                    JumpTest::Always => true
+                };
+                self.call(jump_condition)
             }
             Instruction::INC(target) => {
                 match target {
