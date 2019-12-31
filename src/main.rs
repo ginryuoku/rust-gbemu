@@ -154,7 +154,7 @@ enum JumpTest {
 }
 
 enum IncDecTarget {
-    C, BC, DE
+    B, C, BC, DE
 }
 
 enum PrefixTarget {
@@ -215,6 +215,7 @@ enum Instruction {
     ADD(ArithmeticTarget),
     BIT(PrefixTarget, BitPosition),
     CALL(JumpTest),
+    DEC(IncDecTarget),
     INC(IncDecTarget),
     JP(JumpTest),
     JR(JumpTest),
@@ -246,6 +247,7 @@ impl Instruction {
     fn from_byte_not_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
             0x02 => Some(Instruction::INC(IncDecTarget::BC)),
+            0x05 => Some(Instruction::DEC(IncDecTarget::B)),
             0x06 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::D8))),
             0x0c => Some(Instruction::INC(IncDecTarget::C)),
             0x0e => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
@@ -262,6 +264,7 @@ impl Instruction {
             0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
             0x7c => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0xaf => Some(Instruction::XOR(ArithmeticTarget::A)),
+            0xc1 => Some(Instruction::POP(StackTarget::BC)),
             0xc5 => Some(Instruction::PUSH(StackTarget::BC)),
             0xcd => Some(Instruction::CALL(JumpTest::Always)),
             0xe0 => Some(Instruction::LD(LoadType::ByteAddressFromA)),
@@ -584,6 +587,22 @@ impl CPU {
                 };
                 self.call(jump_condition)
             }
+            Instruction::DEC(target) => {
+                match target {
+                    IncDecTarget::B => {
+                        let value = self.registers.b;
+                        let new_value = self.dec_8bit(value);
+                        self.registers.b = new_value;
+                    },
+                    IncDecTarget::C => {
+                        let value = self.registers.c;
+                        let new_value = self.dec_8bit(value);
+                        self.registers.c = new_value;
+                    },
+                    _ => {panic!("TODO: implement other targets")}
+                };
+                self.pc.wrapping_add(1)
+            }            
             Instruction::INC(target) => {
                 match target {
                     IncDecTarget::C => {
