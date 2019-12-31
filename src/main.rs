@@ -5,6 +5,7 @@ use clap::{Arg, App};
 use minifb::{WindowOptions, Window, Key};
 
 use std::io::Read;
+use std::time::Instant;
 
 struct Registers {
     a: u8,
@@ -344,7 +345,11 @@ impl std::convert::From<u8> for BackgroundColors {
             )
     }
 }
+
+const SCREEN_WIDTH: usize = 160;
+const SCREEN_HEIGHT: usize = 144;
 struct GPU {
+    pub canvas_buffer: [u8; SCREEN_WIDTH * SCREEN_HEIGHT * 4],
     vram: [u8; VRAM_SIZE],
     tile_set: [Tile; 384],
     background_colors: BackgroundColors
@@ -353,10 +358,15 @@ struct GPU {
 impl GPU {
     fn new() -> GPU {
         GPU {
+            canvas_buffer: [0; SCREEN_WIDTH * SCREEN_HEIGHT * 4],
             tile_set: [empty_tile(); 384],
             vram: [0; VRAM_SIZE],
             background_colors: BackgroundColors::new()
         }
+    }
+
+    fn read_vram(&self, address: usize) -> u8 {
+        self.vram[address]
     }
 
     fn write_vram(&mut self, index: usize, value: u8) {
@@ -431,15 +441,22 @@ impl MemoryBus {
     fn read_byte(&self, address: u16) -> u8 {
         let address = address as usize;
         match address {
-            BOOT_ROM_BEGIN ... BOOT_ROM_END => {
+            BOOT_ROM_BEGIN ..= BOOT_ROM_END => {
                 if let Some(boot_rom) = self.boot_rom {
                     boot_rom[address]
                 } else {
                     self.rom_bank_0[address]
                 }
             }
-            ROM_BANK_0_BEGIN ... ROM_BANK_0_END => {
+            ROM_BANK_0_BEGIN ..= ROM_BANK_0_END => {
                 self.rom_bank_0[address]
+            }
+            VRAM_BEGIN ..= VRAM_END => {
+                self.gpu.read_vram(address - VRAM_BEGIN)
+            }
+            0xFFFA ..= 0xFFFB => {
+                //println!("Reading undocumented register 0x{:x}", address);
+                0xFF
             }
             _ => {
                 panic!("Reading from unknown memory at address 0x{:x}", address);
@@ -481,9 +498,11 @@ impl MemoryBus {
                 // background colors setting
                 self.gpu.background_colors = value.into();
             }
+            
             _ => panic!("Writing '0b{:b}' to an unknown I/O register {:x}", value, address)
         }
     }
+
 }
 
 impl CPU {
@@ -497,15 +516,15 @@ impl CPU {
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> usize {
         let mut instruction_byte = self.bus.read_byte(self.pc);
         let prefixed = instruction_byte == 0xCB;
         if prefixed {
             instruction_byte = self.bus.read_byte(self.pc + 1);
         }
 
-        let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
-        println!("Decoding instruction found at: {}, pc: 0x{:x}", description, self.pc);
+        //let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
+        //println!("Decoding instruction found at: {}, pc: 0x{:x}", description, self.pc);
 
         let next_pc: u16 = if 
         let Some(instruction) = Instruction::from_byte(instruction_byte, prefixed) {
@@ -516,6 +535,7 @@ impl CPU {
         };
 
         self.pc = next_pc;
+        2
     }
 
     fn jump(&self, should_jump: bool) -> u16 {
@@ -767,6 +787,14 @@ impl CPU {
         self.registers.f.subtract = false;
         self.registers.f.half_carry = true;
     }
+    fn dec_8bit(&mut self, value: u8) -> u8 {
+        let (new_value, did_overflow) = value.overflowing_sub(1);
+        self.registers.f.zero = new_value == 0;
+        self.registers.f.subtract = true;
+        self.registers.f.half_carry = (new_value & 0xF) + (value & 0xF) > 0xF;
+        self.registers.f.carry = did_overflow;
+        new_value
+    }    
     fn inc_8bit(&mut self, value: u8) -> u8 {
         let (new_value, did_overflow) = value.overflowing_add(1);
         self.registers.f.zero = new_value == 0;
@@ -826,6 +854,9 @@ impl CPU {
     }
 }
 
+const ENLARGEMENT_FACTOR: usize = 1;
+const WINDOW_DIMENSIONS: [usize; 2] = [(160 * ENLARGEMENT_FACTOR), (144 * ENLARGEMENT_FACTOR)];
+
 fn main() {
     let matches = App::new("Rust GBemu")
         .author("Michelle Darcy <mdarcy137@gmail.com")
@@ -843,20 +874,49 @@ fn main() {
     let boot_buffer = matches.value_of("bootrom").map(|path| buffer_from_file(path));
     let game_buffer = matches.value_of("rom").map(|path| buffer_from_file(path)).unwrap();
     let cpu = CPU::new(boot_buffer, game_buffer);
+    let window = Window::new(
+        "Rust GBemu",
+        WINDOW_DIMENSIONS[0],
+        WINDOW_DIMENSIONS[1],
+        WindowOptions::default(),
+    ).unwrap();    
 
-    run(cpu)
+    run(cpu, window)
 }
 
+const ONE_SECOND_IN_MICROS: usize = 1000000000;
+const ONE_SECOND_IN_CYCLES: usize = 4190000;
+const ONE_FRAME_IN_CYCLES: usize = 70224;
 const NUMBER_OF_PIXELS: usize = 23040;
 
-fn run(mut cpu: CPU) {
+fn run(mut cpu: CPU, mut window: Window) {
     let mut buffer = [0; NUMBER_OF_PIXELS];
     let mut cycles_elapsed_in_frame = 0usize;
-    // let mut now = Instant::now();
+    let mut now = Instant::now();
 
-    loop {
-        cpu.step();
-    }    
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        let time_delta = now.elapsed().subsec_nanos();
+        now = Instant::now();
+        let delta = time_delta as f64 / ONE_SECOND_IN_MICROS as f64;
+        let cycles_to_run = delta * ONE_SECOND_IN_CYCLES as f64;
+
+        let mut cycles_elapsed = 0;
+        while cycles_elapsed <= cycles_to_run as usize {
+            cycles_elapsed += cpu.step() as usize;
+        }
+        cycles_elapsed_in_frame += cycles_elapsed;
+
+        for (i, pixel) in cpu.bus.gpu.canvas_buffer.chunks(4).enumerate() {
+            buffer[i] = (pixel[3] as u32) << 24
+                | (pixel[2] as u32) << 16
+                | (pixel[1] as u32) << 8
+                | (pixel[0] as u32)
+        }
+        window.update_with_buffer(&buffer).unwrap();
+        loop {
+            cpu.step();
+        } 
+    }
 }
 
 fn buffer_from_file(path: &str) -> Vec<u8> {
